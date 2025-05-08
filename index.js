@@ -1,117 +1,112 @@
+// index.js
 const express = require("express");
 const bodyParser = require("body-parser");
-const request = require("request");
-const app = express();
-
+const axios = require("axios");
 require("dotenv").config();
+
+const app = express();
+app.use(bodyParser.json());
 
 const PAGE_ACCESS_TOKEN = process.env.PAGE_ACCESS_TOKEN;
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN || "agemera_bot_2025";
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
-app.use(bodyParser.json());
+const sessions = {}; // لتخزين الجلسات لكل عميل
 
-// Endpoint للفيسبوك يتحقق من الـ webhook
+// تحقق webhook
 app.get("/webhook", (req, res) => {
   const mode = req.query["hub.mode"];
   const token = req.query["hub.verify_token"];
   const challenge = req.query["hub.challenge"];
-
-  if (mode && token) {
-    if (mode === "subscribe" && token === VERIFY_TOKEN) {
-      console.log("WEBHOOK_VERIFIED");
-      res.status(200).send(challenge);
-    } else {
-      res.sendStatus(403);
-    }
+  if (mode === "subscribe" && token === VERIFY_TOKEN) {
+    return res.status(200).send(challenge);
   }
+  res.sendStatus(403);
 });
 
-// الـ webhook اللي يستقبل الرسائل
-app.post("/webhook", (req, res) => {
-  const body = req.body;
+// استلام رسائل
+app.post("/webhook", async (req, res) => {
+  if (req.body.object === "page") {
+    for (const entry of req.body.entry) {
+      for (const event of entry.messaging) {
+        const senderId = event.sender.id;
+        if (event.message && event.message.text) {
+          const userMsg = event.message.text;
+          const reply = await getChatGPTReply(senderId, userMsg);
 
-  if (body.object === "page") {
-    body.entry.forEach((entry) => {
-      const webhookEvent = entry.messaging[0];
-      const senderPsid = webhookEvent.sender.id;
+          // لو فيها كلمة "منتج" أو "شكل" نرسل صورة
+          if (/منتج|شكل|علبة|package/i.test(userMsg)) {
+            await sendImage(senderId, "https://i.imgur.com/4AiXzf8.jpeg");
+          }
 
-      if (webhookEvent.message) {
-        handleMessage(senderPsid, webhookEvent.message);
-      } else if (webhookEvent.postback) {
-        handleMessage(senderPsid, { text: "ضغطت على زر" });
+          await sendText(senderId, reply);
+        }
       }
-    });
+    }
     res.status(200).send("EVENT_RECEIVED");
   } else {
     res.sendStatus(404);
   }
 });
 
-// دالة الرد على الرسائل
-function handleMessage(senderPsid, receivedMessage) {
-  let messageData;
-
-  const text = receivedMessage.text?.toLowerCase();
-
-  if (text === "صورة") {
-    messageData = {
-      attachment: {
-        type: "image",
-        payload: {
-          url: "https://i.imgur.com/4AiXzf8.jpeg",
-          is_reusable: true,
-        },
-      },
-    };
-  } else if (text === "رابط") {
-    messageData = {
-      attachment: {
-        type: "template",
-        payload: {
-          template_type: "button",
-          text: "اضغط هنا لزيارة الرابط:",
-          buttons: [
-            {
-              type: "web_url",
-              url: "https://google.com",
-              title: "فتح الرابط",
-            },
-          ],
-        },
-      },
-    };
-  } else if (text === "فيديو") {
-    messageData = { text: `أهلاً! استلمت رسالتك: "${text}"` };
-  } else {
-    messageData = { text: `شكرًا لرسالتك: "${receivedMessage.text}"` };
-  }
-
-  callSendAPI(senderPsid, messageData);
-}
-
-// إرسال الرسالة فعليًا لفيسبوك
-function callSendAPI(senderPsid, response) {
-  const requestBody = {
-    recipient: { id: senderPsid },
-    message: response,
-  };
-
-  request(
+// دالة إرسال نص
+async function sendText(psid, message) {
+  await axios.post(
+    `https://graph.facebook.com/v17.0/me/messages?access_token=${PAGE_ACCESS_TOKEN}`,
     {
-      uri: "https://graph.facebook.com/v18.0/me/messages",
-      qs: { access_token: PAGE_ACCESS_TOKEN },
-      method: "POST",
-      json: requestBody,
-    },
-    (err, res, body) => {
-      if (!err) {
-        console.log("تم إرسال الرسالة ✅");
-      } else {
-        console.error("خطأ في إرسال الرسالة ❌:", err);
-      }
+      recipient: { id: psid },
+      message: { text: message },
     }
   );
 }
 
+// دالة إرسال صورة
+async function sendImage(psid, imageUrl) {
+  await axios.post(
+    `https://graph.facebook.com/v17.0/me/messages?access_token=${PAGE_ACCESS_TOKEN}`,
+    {
+      recipient: { id: psid },
+      message: {
+        attachment: {
+          type: "image",
+          payload: { url: imageUrl, is_reusable: true },
+        },
+      },
+    }
+  );
+}
+
+// دالة الرد من ChatGPT
+async function getChatGPTReply(userId, userMessage) {
+  const session = sessions[userId] || [];
+  session.push({ role: "user", content: userMessage });
+
+  try {
+    const response = await axios.post(
+      "https://api.openai.com/v1/chat/completions",
+      {
+        model: "gpt-3.5-turbo",
+        messages: session.slice(-10),
+        temperature: 0.7,
+      },
+      {
+        headers: {
+          "Authorization": `Bearer ${OPENAI_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    const reply = response.data.choices[0].message.content;
+    session.push({ role: "assistant", content: reply });
+    sessions[userId] = session;
+    return reply;
+  } catch (err) {
+    console.error("ChatGPT API error:", err.message);
+    return "حصلت مشكلة بسيطة، جرب تاني بعد شوية 🙏";
+  }
+}
+
+// تشغيل السيرفر
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`🚀 Server is listening on port ${PORT}`));
+app.listen(PORT, () => console.log("🚀 Bot is running on port", PORT));
