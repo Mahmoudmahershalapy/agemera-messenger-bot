@@ -34,7 +34,6 @@ app.post("/webhook", async (req, res) => {
           const userMsg = event.message.text;
           const reply = await getChatGPTReply(senderId, userMsg);
 
-          // لو فيها كلمة "منتج" أو "شكل" نرسل صورة
           if (/منتج|شكل|علبة|package/i.test(userMsg)) {
             await sendImage(senderId, "https://i.imgur.com/4AiXzf8.jpeg");
           }
@@ -76,9 +75,16 @@ async function sendImage(psid, imageUrl) {
   );
 }
 
-// دالة الرد من ChatGPT
+// دالة الرد من ChatGPT مع توجيه المساعد لبيع المنتج
 async function getChatGPTReply(userId, userMessage) {
-  const session = sessions[userId] || [];
+  const session = sessions[userId] || [
+    {
+      role: "system",
+      content:
+        "أنت مساعد مبيعات ذكي لمنتجات جنسية موجهة للسيدات فقط. دورك هو شرح المنتج، بناء ثقة، وتحويل المحادثة إلى أوردر حقيقي من العميل (الاسم، رقم الموبايل، العنوان). كن ودودًا، صريحًا، بشريًا، لا تخرج عن هدف البيع، لا تتجاهل العميل أبدًا، ولا تنهِ المحادثة من نفسك."
+    }
+  ];
+
   session.push({ role: "user", content: userMessage });
 
   try {
@@ -91,7 +97,7 @@ async function getChatGPTReply(userId, userMessage) {
       },
       {
         headers: {
-          "Authorization": `Bearer ${OPENAI_API_KEY}`,
+          Authorization: `Bearer ${OPENAI_API_KEY}`,
           "Content-Type": "application/json",
         },
       }
