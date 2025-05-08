@@ -5,7 +5,7 @@ const axios = require('axios');
 const app = express().use(bodyParser.json());
 
 const PAGE_ACCESS_TOKEN = process.env.PAGE_ACCESS_TOKEN;
-const VERIFY_TOKEN = process.env.VERIFY_TOKEN || 'ajimera_bot_2025';
+const VERIFY_TOKEN = process.env.VERIFY_TOKEN || 'agemera_bot_2025';
 
 app.get('/webhook', (req, res) => {
   const mode = req.query['hub.mode'];
@@ -39,7 +39,7 @@ app.post('/webhook', async (req, res) => {
         } else if (receivedMessage.includes("فيديو")) {
           await sendMessage(senderPsid, 'video', 'https://www.w3schools.com/html/mov_bbb.mp4');
         } else if (receivedMessage.includes("رابط")) {
-          await sendMessage(senderPsid, 'link', 'https://ajimera.com');
+          await sendMessage(senderPsid, 'link', 'https://agemera.com');
         } else {
           await sendMessage(senderPsid, 'text', `أهلاً! استلمت رسالتك: "${receivedMessage}"`);
         }

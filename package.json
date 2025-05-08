@@ -1,7 +1,7 @@
 {
   "name": "agemera-messenger-bot",
   "version": "1.0.0",
-  "description": "Messenger bot for Ajimera",
+  "description": "Messenger bot for agemera",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
