@@ -71,6 +71,7 @@ app.post("/webhook", async (req, res) => {
             return;
           }
 
+          
           const matchedIntent = findMatchingIntent(userMsg);
           if (matchedIntent) {
             console.log(`✅ intent matched: ${matchedIntent.tag}`);
@@ -83,6 +84,8 @@ app.post("/webhook", async (req, res) => {
               }
             }
             return;
+          } else {
+            console.log("❌ No intent matched, falling back to ChatGPT");
           }
 
           const reply = await getChatGPTReply(senderId, userMsg);
