@@ -8,6 +8,12 @@ const trainingData = require("./training.json");
 
 
 function escapeRegExp(string) {
+  return String(string).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+
+
+function escapeRegExp(string) {
   return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
@@ -61,6 +67,7 @@ app.post("/webhook", async (req, res) => {
           
           const matchedIntent = findMatchingIntent(userMsg);
           if (matchedIntent) {
+            console.log(`✅ intent matched: ${matchedIntent.tag}`);
             for (const response of matchedIntent.responses) {
               if (response.startsWith("[IMAGE:")) {
                 const imageUrl = response.match(/\[IMAGE:(.*?)\]/)[1];
