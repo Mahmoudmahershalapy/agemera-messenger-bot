@@ -20,6 +20,48 @@ const selectedOffer = {};
 const clientStage = {};
 const customerData = {};
 
+app.get("/webhook", (req, res) => {
+  const mode = req.query["hub.mode"];
+  const token = req.query["hub.verify_token"];
+  const challenge = req.query["hub.challenge"];
+  if (mode === "subscribe" && token === VERIFY_TOKEN) {
+    return res.status(200).send(challenge);
+  }
+  res.sendStatus(403);
+});
+
+app.post("/webhook", async (req, res) => {
+  if (req.body.object === "page") {
+    for (const entry of req.body.entry) {
+      for (const event of entry.messaging) {
+        const senderId = event.sender.id;
+        if (event.message && (event.message.text || event.message.attachments)) {
+          const userMsg = event.message.text || "[وسائط مرفقة]";
+          lastInteraction[senderId] = Date.now();
+
+          const extracted = extractCustomerData(userMsg, senderId);
+          if (extracted) {
+            await sendText(senderId, extracted);
+            continue;
+          }
+
+          for (const rule of extraRules) {
+            if (rule.trigger.test(userMsg)) {
+              await sendMultiText(senderId, rule.reply);
+              return;
+            }
+          }
+
+          await sendMultiText(senderId, "أنا لسه معاكِ يا قمر، كنت منتظرة ردك بس ❤️");
+        }
+      }
+    }
+    res.status(200).send("EVENT_RECEIVED");
+  } else {
+    res.sendStatus(404);
+  }
+});
+
 function sendOrderToSheet(data) {
   if (!GOOGLE_SHEET_WEBHOOK_URL) return;
   axios.post(GOOGLE_SHEET_WEBHOOK_URL, data).catch(err => {
