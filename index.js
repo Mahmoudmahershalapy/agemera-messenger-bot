@@ -97,6 +97,7 @@ app.post("/webhook", async (req, res) => {
 });
 
 async function sendText(psid, message) {
+  if (!psid) { console.warn('⛔ لا يوجد معرف للمستخدم (senderId) – لا يمكن الإرسال'); return; }
   try {
     await axios.post(`https://graph.facebook.com/v17.0/me/messages?access_token=${PAGE_ACCESS_TOKEN}`, {
       recipient: { id: psid },
@@ -108,6 +109,7 @@ async function sendText(psid, message) {
 }
 
 async function sendImage(psid, imageUrl) {
+  if (!psid) { console.warn('⛔ لا يوجد معرف للمستخدم (senderId) – لا يمكن الإرسال'); return; }
   try {
     await axios.post(`https://graph.facebook.com/v17.0/me/messages?access_token=${PAGE_ACCESS_TOKEN}`, {
       recipient: { id: psid },
