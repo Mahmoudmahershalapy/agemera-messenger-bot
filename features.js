@@ -36,3 +36,28 @@ function sendValueFollowUp() {
 }
 
 module.exports.sendValueFollowUp = sendValueFollowUp;
+
+
+// فولو أب تلقائي عند السكوت
+function shouldSendFollowUp(senderId, lastInteraction) {
+  const now = Date.now();
+  const previous = lastInteraction[senderId];
+  if (!previous) return false;
+
+  const minutesSince = (now - previous) / 60000;
+  return (minutesSince >= 3 && minutesSince < 4) || (minutesSince >= 10 && minutesSince < 11);
+}
+
+function getFollowUpMessages() {
+  return [
+    "الشوكولاتة دي مش عاديه خالص\n" +
+    "هي أكتر منتج عليه طلب عندنا، وكل بنت جربتها رجعت تشتري تاني بنفسها، لأنها بتفرق فعلًا في إحساسك وثقتك بنفسك 💕\n" +
+    "بصّي كده على شوية آراء من بنات زيك، وهتفهمي ليه بقولك كده 👇",
+    "[IMAGE:/assets/ريفيو شيكولاته نسائي 1.jpg]",
+    "[IMAGE:/assets/ريفيو شيكولاته نسائي 2.jpg]",
+    "[IMAGE:/assets/ريفيو العرض الشامل 7.jpg]"
+  ];
+}
+
+module.exports.shouldSendFollowUp = shouldSendFollowUp;
+module.exports.getFollowUpMessages = getFollowUpMessages;
