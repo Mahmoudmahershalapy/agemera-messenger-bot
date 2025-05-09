@@ -11,6 +11,7 @@ app.use(bodyParser.json());
 const PAGE_ACCESS_TOKEN = process.env.PAGE_ACCESS_TOKEN;
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN || "agemera_bot_2025";
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const GOOGLE_SHEET_WEBHOOK_URL = process.env.GOOGLE_SHEET_WEBHOOK_URL;
 
 const sessions = {};
 const lastInteraction = {};
@@ -19,6 +20,66 @@ const lastImageSent = {};
 const selectedOffer = {};
 const clientStage = {};
 const customerData = {};
+
+function sendOrderToSheet(data) {
+  if (!GOOGLE_SHEET_WEBHOOK_URL) return;
+  axios.post(GOOGLE_SHEET_WEBHOOK_URL, data).catch(err => {
+    console.warn("فشل إرسال البيانات إلى Google Sheet:", err.message);
+  });
+}
+
+function extractCustomerData(message, senderId) {
+  const nameMatch = message.match(/اسمي\s+(\w+)/i);
+  const phoneMatch = message.match(/\b01[0-9]{9}\b/);
+  const addressMatch = message.match(/شارع[^\n\r]*/i);
+
+  if (!customerData[senderId]) customerData[senderId] = {};
+
+  if (nameMatch) customerData[senderId].name = nameMatch[1];
+  if (phoneMatch) customerData[senderId].phone = phoneMatch[0];
+  if (addressMatch) customerData[senderId].address = addressMatch[0];
+
+  const data = customerData[senderId];
+  if (data.name && data.phone && data.address) {
+    clientStage[senderId] = "اكتمل الأوردر";
+    sendOrderToSheet({
+      name: data.name,
+      phone: data.phone,
+      address: data.address,
+      stage: clientStage[senderId],
+      sender_id: senderId
+    });
+    return `📦 تم تسجيل الطلب بنجاح!\nاسم: ${data.name}\nموبايل: ${data.phone}\nعنوان: ${data.address}\nهنتواصل معاكي لتأكيد الشحن خلال ساعات 💌`;
+  }
+  return null;
+}
+
+function sendTyping(senderId, duration = 1500) {
+  return axios.post(
+    `https://graph.facebook.com/v17.0/me/messages?access_token=${PAGE_ACCESS_TOKEN}`,
+    {
+      recipient: { id: senderId },
+      sender_action: "typing_on"
+    }
+  ).then(() => new Promise(resolve => setTimeout(resolve, duration)));
+}
+
+function sendText(senderId, text) {
+  return axios.post(
+    `https://graph.facebook.com/v17.0/me/messages?access_token=${PAGE_ACCESS_TOKEN}`,
+    {
+      recipient: { id: senderId },
+      message: { text }
+    }
+  ).catch(err => console.error("فشل إرسال الرسالة:", err.message));
+}
+
+function sendMultiText(senderId, fullText) {
+  const parts = fullText.split(/\n{2,}|\.\s*/).filter(Boolean);
+  return parts.reduce((promise, part) => {
+    return promise.then(() => sendTyping(senderId).then(() => sendText(senderId, part.trim())));
+  }, Promise.resolve());
+}
 
 function loadTrainingRules(filePaths) {
   let rules = [];
@@ -43,115 +104,3 @@ const extraRules = loadTrainingRules([
   "./training/male_training.json",
   "./training/general_training.json"
 ]);
-
-const stageImages = {
-  "عرض المنتج": "https://i.imgur.com/4AiXzf8.jpeg",
-  "تجارب العملاء": [
-    "https://i.imgur.com/a1.jpg",
-    "https://i.imgur.com/b2.jpg",
-    "https://i.imgur.com/c3.jpg"
-  ],
-  "العرض الشامل": "https://i.imgur.com/full-offer.jpg"
-};
-
-const approvalTriggers = ["تمام", "ماشي", "موافق", "اه", "اوكي", "توكلنا على الله", "عايزه العرض", "سجليلي"];
-const followupTriggers = ["هكلم جوزي", "هفكر", "ارجعلك", "مشغولة"];
-const offerTriggers = [/عرض رقم\s*\d+/, /العرض (الأول|الثاني|الثالث|الشامل)/i];
-
-const decisionRules = [
-  {
-    trigger: /بكام|السعر/i,
-    reply: () => {
-      return {
-        text: "🔥 العروض تبدأ من 199 جنيه، وفيه عروض بتشمل شوكولاتة + عسل هدية، تحبي أشرحهم؟",
-        stage: "عرض السعر"
-      };
-    }
-  },
-  {
-    trigger: /حامل|سكر|ضغط|آمن/i,
-    reply: () => {
-      return {
-        text: "المنتج آمن ١٠٠٪ لأنه من أعشاب طبيعية ومصرّح بيه من وزارة الصحة 💚",
-        stage: "طمأنة"
-      };
-    }
-  },
-  {
-    trigger: /هل فعلاً بيشتغل|تجارب/i,
-    reply: () => {
-      return {
-        text: "هبعتلك شوية تجارب لبنات استخدموه، شوفي بنفسك 💬",
-        stage: "إرسال تجارب"
-      };
-    }
-  },
-  {
-    trigger: /معايا حضرتك|؟؟؟|؟؟|؟/i,
-    reply: () => {
-      return {
-        text: "أنا لسه معاكِ يا قمر، كنت منتظرة ردك بس ❤️",
-        stage: "متابعة بعد صمت"
-      };
-    }
-  },
-  {
-    trigger: /العرض الشامل/i,
-    reply: () => {
-      return {
-        text: "📦 العرض الشامل: شوكولاتة حريمي + رجالي + جل + 3 عسل هدية بـ 349 جنيه بس 🔥",
-        stage: "عرض السعر"
-      };
-    }
-  },
-  ...extraRules.map(rule => ({
-    trigger: rule.trigger,
-    reply: () => ({ text: rule.reply })
-  }))
-];
-
-function suggestNextStep(senderId) {
-  const stage = clientStage[senderId];
-  if (stage === "عرض المنتج") {
-    return "تحبي أقولك على أقوى العروض اللي ممكن تفيدك؟ ✨";
-  }
-  return null;
-}
-
-function extractCustomerData(message, senderId) {
-  const nameMatch = message.match(/اسمي\s+(\w+)/i);
-  const phoneMatch = message.match(/\b01[0-9]{9}\b/);
-  const addressMatch = message.match(/شارع[^\n\r]*/i);
-
-  if (!customerData[senderId]) customerData[senderId] = {};
-
-  if (nameMatch) customerData[senderId].name = nameMatch[1];
-  if (phoneMatch) customerData[senderId].phone = phoneMatch[0];
-  if (addressMatch) customerData[senderId].address = addressMatch[0];
-
-  const data = customerData[senderId];
-  if (data.name && data.phone && data.address) {
-    clientStage[senderId] = "اكتمل الأوردر";
-    return `📦 تم تسجيل الطلب بنجاح!\nاسم: ${data.name}\nموبايل: ${data.phone}\nعنوان: ${data.address}\nهنتواصل معاكي لتأكيد الشحن خلال ساعات 💌`;
-  }
-  return null;
-}
-
-async function sendTyping(senderId, duration = 1500) {
-  await axios.post(
-    `https://graph.facebook.com/v17.0/me/messages?access_token=${PAGE_ACCESS_TOKEN}`,
-    {
-      recipient: { id: senderId },
-      sender_action: "typing_on"
-    }
-  );
-  return new Promise(resolve => setTimeout(resolve, duration));
-}
-
-async function sendMultiText(senderId, fullText) {
-  const parts = fullText.split(/\n{2,}|\.\s*/).filter(Boolean);
-  for (const part of parts) {
-    await sendTyping(senderId);
-    await sendText(senderId, part.trim());
-  }
-}
