@@ -6,6 +6,12 @@ require("dotenv").config();
 
 const trainingData = require("./training.json");
 
+
+function escapeRegExp(string) {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+
 // البحث عن intent مناسب للرسالة
 function findMatchingIntent(message) {
   for (const intent of trainingData.intents) {
