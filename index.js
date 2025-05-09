@@ -4,6 +4,10 @@ const bodyParser = require("body-parser");
 const axios = require("axios");
 require("dotenv").config();
 
+
+const { shouldMuteUser, markAdminIntervention } = require("./features");
+const trainingData = require("./training.json");
+
 const app = express();
 app.use(bodyParser.json());
 
@@ -31,7 +35,22 @@ app.post("/webhook", async (req, res) => {
     for (const entry of req.body.entry) {
       for (const event of entry.messaging) {
         const senderId = event.sender.id;
-        if (event.message && (event.message.text || event.message.attachments)) {
+        
+        if (event.message && event.message.text) {
+          const userMsg = event.message.text;
+
+          // لو الرسالة فيها تدخل من الأدمن
+          if (userMsg.startsWith("!")) {
+            markAdminIntervention(senderId);
+            return;
+          }
+
+          // لو العميل مكتوم، تجاهل الرد
+          if (shouldMuteUser(senderId)) {
+            console.log(`⏳ Skipping muted user ${senderId}`);
+            return;
+          }
+ (event.message.text || event.message.attachments)) {
           const userMsg = event.message.text || "[وسائط مرفقة]";
           const now = Date.now();
           lastInteraction[senderId] = now;
