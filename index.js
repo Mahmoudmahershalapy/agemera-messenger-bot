@@ -2,7 +2,7 @@
 const express = require("express");
 const bodyParser = require("body-parser");
 const axios = require("axios");
-const { shouldMuteUser, markAdminIntervention } = require("./features");
+const { shouldMuteUser, markAdminIntervention, sendValueFollowUp } = require("./features");
 const trainingData = require("./training.json");
 require("dotenv").config();
 
@@ -37,6 +37,42 @@ app.post("/webhook", async (req, res) => {
           const userMsg = event.message.text || "[وسائط مرفقة]";
           const now = Date.now();
           lastInteraction[senderId] = now;
+        // التحقق من وقت آخر تفاعل
+        const previous = lastInteraction[senderId];
+        const now = Date.now();
+        const minutesSinceLast = (now - previous) / 60000;
+
+        // لو فات أكتر من 3 دقايق من غير رد
+        // لو فات أكتر من 10 دقايق من غير رد
+        if (previous && minutesSinceLast >= 10 && minutesSinceLast < 11) {
+          const followUpMessages = sendValueFollowUp();
+          for (const msg of followUpMessages) {
+            if (msg.startsWith("[IMAGE:")) {
+              const imageUrl = msg.match(/\[IMAGE:(.*?)\]/)[1];
+              await sendImage(senderId, imageUrl);
+            } else {
+              await sendText(senderId, msg);
+            }
+          }
+          lastInteraction[senderId] = now;
+          return;
+        }
+
+        if (previous && minutesSinceLast >= 3 && minutesSinceLast < 4) {
+          const followUpMessages = sendValueFollowUp();
+          for (const msg of followUpMessages) {
+            if (msg.startsWith("[IMAGE:")) {
+              const imageUrl = msg.match(/\[IMAGE:(.*?)\]/)[1];
+              await sendImage(senderId, imageUrl);
+            } else {
+              await sendText(senderId, msg);
+            }
+          }
+          // حدث آخر تفاعل بعد الإرسال
+          lastInteraction[senderId] = now;
+          return;
+        }
+
 
           if (userMsg.startsWith("!")) {
             markAdminIntervention(senderId);
