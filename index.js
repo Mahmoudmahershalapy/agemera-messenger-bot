@@ -50,16 +50,7 @@ app.post("/webhook", async (req, res) => {
             console.log(`⏳ Skipping muted user ${senderId}`);
             return;
           }
- (event.message.text || event.message.attachments)) {
-          const userMsg = event.message.text || "[وسائط مرفقة]";
-          const now = Date.now();
-          lastInteraction[senderId] = now;
-
-          const reply = await getChatGPTReply(senderId, userMsg);
-
-          if (/منتج|شكل|علبة|package/i.test(userMsg)) {
-            await sendImage(senderId, "https://i.imgur.com/4AiXzf8.jpeg");
-          }
+ 
 
           await sendText(senderId, reply);
         }
