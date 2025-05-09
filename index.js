@@ -60,6 +60,24 @@ app.post("/webhook", async (req, res) => {
             }
           }
 
+          
+          if (reply.includes("[AUDIO:")) {
+            const audioUrl = reply.match(/\[AUDIO:(.*?)\]/)?.[1];
+            if (audioUrl) {
+              await sendAudio(senderId, audioUrl);
+              return;
+            }
+          }
+
+          
+          if (reply.includes("[VIDEO:")) {
+            const videoUrl = reply.match(/\[VIDEO:(.*?)\]/)?.[1];
+            if (videoUrl) {
+              await sendVideo(senderId, videoUrl);
+              return;
+            }
+          }
+
           await sendText(senderId, reply);
         }
       }
@@ -138,6 +156,48 @@ async function getChatGPTReply(userId, userMessage) {
     return "فيه مشكلة بسيطة، ممكن تبعتيلي تاني؟ 🙏";
   }
 }
+
+
+async function sendAudio(psid, audioUrl) {
+  try {
+    await axios.post(
+      `https://graph.facebook.com/v17.0/me/messages?access_token=${PAGE_ACCESS_TOKEN}`,
+      {
+        recipient: { id: psid },
+        message: {
+          attachment: {
+            type: "audio",
+            payload: { url: audioUrl, is_reusable: true },
+          },
+        },
+      }
+    );
+  } catch (err) {
+    console.error("SendAudio Error:", err.response?.data || err.message);
+  }
+}
+
+
+
+async function sendVideo(psid, videoUrl) {
+  try {
+    await axios.post(
+      `https://graph.facebook.com/v17.0/me/messages?access_token=${PAGE_ACCESS_TOKEN}`,
+      {
+        recipient: { id: psid },
+        message: {
+          attachment: {
+            type: "video",
+            payload: { url: videoUrl, is_reusable: true },
+          },
+        },
+      }
+    );
+  } catch (err) {
+    console.error("SendVideo Error:", err.response?.data || err.message);
+  }
+}
+
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("🚀 Bot is running on port", PORT));
