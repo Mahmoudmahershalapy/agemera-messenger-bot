@@ -3,6 +3,7 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const axios = require("axios");
 const { shouldMuteUser, markAdminIntervention } = require("./features");
+const trainingData = require("./training.json");
 require("dotenv").config();
 
 const app = express();
@@ -11,6 +12,7 @@ app.use(bodyParser.json());
 const PAGE_ACCESS_TOKEN = process.env.PAGE_ACCESS_TOKEN;
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN || "agemera_bot_2025";
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+
 const sessions = {};
 const lastInteraction = {};
 
@@ -29,6 +31,7 @@ app.post("/webhook", async (req, res) => {
     for (const entry of req.body.entry) {
       for (const event of entry.messaging) {
         const senderId = event.sender.id;
+
         if (event.message && (event.message.text || event.message.attachments)) {
           const userMsg = event.message.text || "[وسائط مرفقة]";
           const now = Date.now();
@@ -39,15 +42,21 @@ app.post("/webhook", async (req, res) => {
             return;
           }
 
-          if (shouldMuteUser(senderId)) {
-            console.log(`⏳ Skipping muted user ${senderId}`);
-            return;
-          }
+          if (shouldMuteUser(senderId)) return;
 
           const reply = await getChatGPTReply(senderId, userMsg);
 
           if (/منتج|شكل|علبة|package/i.test(userMsg)) {
             await sendImage(senderId, "https://i.imgur.com/4AiXzf8.jpeg");
+          }
+
+          
+          if (reply.includes("[IMAGE:")) {
+            const imageUrl = reply.match(/\[IMAGE:(.*?)\]/)?.[1];
+            if (imageUrl) {
+              await sendImage(senderId, imageUrl);
+              return; // الصورة كفاية، مش محتاج يبعَت كمان رسالة
+            }
           }
 
           await sendText(senderId, reply);
@@ -97,8 +106,7 @@ async function getChatGPTReply(userId, userMessage) {
   const session = sessions[userId] || [
     {
       role: "system",
-      content:
-        "إنتي دكتورة اسمك هبة، خبيرة في المنتجات الخاصة بالبنات والسيدات، وبتبيعي منتج اسمه 'هيلتي'."
+      content: trainingData.system_prompt
     }
   ];
 
