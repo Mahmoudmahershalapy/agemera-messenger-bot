@@ -4,6 +4,22 @@ const bodyParser = require("body-parser");
 const axios = require("axios");
 require("dotenv").config();
 
+const trainingData = require("./training.json");
+
+// البحث عن intent مناسب للرسالة
+function findMatchingIntent(message) {
+  for (const intent of trainingData.intents) {
+    for (const pattern of intent.patterns) {
+      const regex = new RegExp(pattern.replace(/[.*+?^${}()|[\]\]/g, '\\$&'), "i");
+      if (regex.test(message)) {
+        return intent;
+      }
+    }
+  }
+  return null;
+}
+
+
 const app = express();
 app.use(bodyParser.json());
 
@@ -36,13 +52,23 @@ app.post("/webhook", async (req, res) => {
           const now = Date.now();
           lastInteraction[senderId] = now;
 
-          const reply = await getChatGPTReply(senderId, userMsg);
-
-          if (/منتج|شكل|علبة|package/i.test(userMsg)) {
-            await sendImage(senderId, "https://i.imgur.com/4AiXzf8.jpeg");
+          
+          const matchedIntent = findMatchingIntent(userMsg);
+          if (matchedIntent) {
+            for (const response of matchedIntent.responses) {
+              if (response.startsWith("[IMAGE:")) {
+                const imageUrl = response.match(/\[IMAGE:(.*?)\]/)[1];
+                await sendImage(senderId, imageUrl);
+              } else {
+                await sendText(senderId, response);
+              }
+            }
+            return;
           }
 
+          const reply = await getChatGPTReply(senderId, userMsg);
           await sendText(senderId, reply);
+
         }
       }
     }
