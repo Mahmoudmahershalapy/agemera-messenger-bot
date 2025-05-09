@@ -2,7 +2,6 @@
 const express = require("express");
 const bodyParser = require("body-parser");
 const axios = require("axios");
-const serverless = require("serverless-http");
 require("dotenv").config();
 
 const app = express();
@@ -99,4 +98,4 @@ const extraRules = [
   { trigger: /فيه أعراض جانبية؟/i, reply: "لا إطلاقًا، مفيش أي أعراض جانبية لأنه منتج موضعي طبيعي تمامًا 💯" }
 ];
 
-module.exports.handler = serverless(app);
+module.exports = app;
