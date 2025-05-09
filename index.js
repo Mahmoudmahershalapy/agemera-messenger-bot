@@ -7,6 +7,7 @@ const trainingData = require("./training.json");
 require("dotenv").config();
 
 const app = express();
+app.use("/assets", express.static(__dirname + "/assets"));
 app.use(bodyParser.json());
 
 const PAGE_ACCESS_TOKEN = process.env.PAGE_ACCESS_TOKEN;
